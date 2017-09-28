@@ -1,0 +1,60 @@
+classdef wConv < dagnn.Filter
+  properties
+    size = [0 0 0 0]
+    hasBias = true
+    opts = {'cuDNN'}
+  end
+
+  methods
+    function outputs = forward(obj, inputs, params)
+      if ~obj.hasBias, params{3} = [] ; end
+      outputs{1} = vl_nnwconv(...
+        inputs{1}, params{1}, params{2}, params{3}, [],  ...
+        'pad', obj.pad, ...
+        'stride', obj.stride) ;
+    end
+
+    function [derInputs, derParams] = backward(obj, inputs, params, derOutputs)
+      if ~obj.hasBias, params{3} = [] ; end
+      [derInputs{1}, derParams{1}, derParams{2}, derParams{3}] = vl_nnwconv(...
+        inputs{1}, params{1}, params{2}, params{3}, derOutputs{1}, ...
+        'pad', obj.pad, ...
+        'stride', obj.stride) ;
+    derParams{4} = single(zeros(size(params{4})));
+    end
+
+    function kernelSize = getKernelSize(obj)
+      kernelSize = obj.size(1:2) ;
+    end
+
+    function outputSizes = getOutputSizes(obj, inputSizes)
+      outputSizes = getOutputSizes@dagnn.Filter(obj, inputSizes) ;
+      outputSizes{1}(3) = obj.size(4) ;
+    end
+
+    function params = initParams(obj)
+      sc = sqrt(2 / prod(obj.size(1:3))) ;
+      params{1} = randn(obj.size,'single') * sc ;
+      params{2} = ones(obj.size(4),1,'single');
+      %if obj.hasBias
+        params{3} = zeros(obj.size(4),1,'single') * sc ;
+      %end
+      params{4} = ones(obj.size,'single') ;
+    end
+
+    function set.size(obj, ksize)
+      % make sure that ksize has 4 dimensions
+      ksize = [ksize(:)' 1 1 1 1] ;
+      obj.size = ksize(1:4) ;
+    end
+
+    function obj = wConv(varargin)
+      obj.load(varargin) ;
+      % normalize field by implicitly calling setters defined in
+      % dagnn.Filter and here
+      obj.size = obj.size ;
+      obj.stride = obj.stride ;
+      obj.pad = obj.pad ;
+    end
+  end
+end
